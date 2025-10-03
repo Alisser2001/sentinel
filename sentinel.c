@@ -213,12 +213,14 @@ static int read_proc_stat(pid_t pid, char *comm_out, size_t comm_len, char *stat
 }
 
 static int cmp_cpu_desc(const void *a, const void *b) {
-    const proc_rec *pa = a;
-    const proc_rec *pb = b;
+    const proc_rec *pa = a, *pb = b;
+    if (pa->alive != pb->alive) return pb->alive - pa->alive;
     if (pa->cpu < pb->cpu) return 1;
     if (pa->cpu > pb->cpu) return -1;
     if (pa->rss_kb < pb->rss_kb) return 1;
     if (pa->rss_kb > pb->rss_kb) return -1;
+    if (pa->pid > pb->pid) return 1;
+    if (pa->pid < pb->pid) return -1;
     return 0;
 }
 
@@ -290,6 +292,15 @@ int main(void) {
         for (size_t i = 0; i < records_len; ++i) if (records[i].alive) records[i].prev_proc_time = records[i].cur_proc_time;
         prev_total = cur_total;
         mem_total_kb = read_mem_total_kb();
+
+        size_t w = 0;
+        for (size_t i = 0; i < records_len; ++i) {
+            if (records[i].alive) {
+                if (w != i) records[w] = records[i];
+                w++;
+            }
+        }
+        records_len = w;
 
         if (records_len > 0) qsort(records, records_len, sizeof(proc_rec), cmp_cpu_desc);
 
