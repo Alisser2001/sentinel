@@ -66,6 +66,6 @@ func (e *Engine) Run() {
 		fmt.Print("\033[H\033[J")
 		ui.Render(e.Collector.Records, tasks, running, l1, l5, l15, up)
 
-		time.Sleep(400 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
 }
