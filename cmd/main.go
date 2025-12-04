@@ -1,38 +1,62 @@
 package main
 
 import (
-    "context"
-    "flag"
-    "log"
-    "os"
-    "os/signal"
-    "syscall"
-    "time"
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"time"
 
-    "sentinel/monitor"
-    "sentinel/proc"
+	"sentinel/daemon"
+	"sentinel/monitor"
 )
 
 func main() {
-    interval := flag.Duration("interval", 1*time.Second, "refresh interval (e.g. 500ms, 1s)")
-    hz := flag.Int("hz", 0, "clock ticks per second (0=auto-detect)")
-    flag.Parse()
+	if len(os.Args) < 2 {
+		usage()
+		return
+	}
 
-    logger := log.New(os.Stderr, "[sentinel] ", log.LstdFlags)
+	cmd := os.Args[1]
 
-    // Auto-detect HZ if not specified
-    actualHZ := *hz
-    if actualHZ == 0 {
-        actualHZ = proc.DetectHZ()
-        logger.Printf("auto-detected HZ: %d", actualHZ)
-    }
+	switch cmd {
 
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-    defer stop()
+	case "tui":
+		runTUI()
 
-    engine := monitor.NewEngine()
-    if err := engine.Run(ctx, *interval, actualHZ, logger); err != nil && err != context.Canceled {
-        logger.Printf("engine exit with error: %v", err)
-        os.Exit(1)
-    }
+	case "daemon":
+		runDaemon()
+
+	case "help":
+		usage()
+
+	default:
+		fmt.Println("unknown command:", cmd)
+		usage()
+	}
+}
+
+func usage() {
+	fmt.Println(`
+        Sentinel commands:
+        sentinel tui       → start the TUI monitor
+        sentinel daemon    → start background alert daemon
+        sentinel help      → show help
+    `)
+}
+
+func runTUI() {
+	ctx := context.Background()
+	interval := 1500 * time.Millisecond
+
+	engine := monitor.NewEngine()
+	engine.Run(ctx, interval, 100, log.New(os.Stderr, "[sentinel] ", log.LstdFlags))
+}
+
+func runDaemon() {
+	ctx := context.Background()
+	logger := log.New(os.Stderr, "[sentinel-daemon] ", log.LstdFlags)
+
+	d := daemon.New(1*time.Second, 100, logger)
+	d.Run(ctx)
 }
