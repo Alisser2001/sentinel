@@ -2,102 +2,127 @@ package monitor
 
 import (
 	"os"
-	"strconv"
-
 	"sentinel/model"
 	"sentinel/proc"
+	"sort"
 )
 
 type Collector struct {
 	Records []model.ProcRec
+	PidMap  map[int]int
 }
 
 func NewCollector() *Collector {
-	return &Collector{Records: make([]model.ProcRec, 0)}
+	return &Collector{
+		Records: make([]model.ProcRec, 0, model.MaxRows),
+		PidMap:  make(map[int]int),
+	}
 }
 
-func (c *Collector) findIdx(pid int) int {
-	for i := range c.Records {
-		if c.Records[i].Pid == pid {
-			return i
-		}
-	}
-	return -1
-}
-
-func (c *Collector) ensureRecord(pid int) int {
-	idx := c.findIdx(pid)
-	if idx >= 0 {
-		c.Records[idx].Alive = true
-		return idx
-	}
-	rec := model.ProcRec{
-		Pid:   pid,
-		Alive: true,
-	}
-	c.Records = append(c.Records, rec)
-	return len(c.Records) - 1
-}
-
-func (c *Collector) Scan() (tasks, running int) {
+func (c *Collector) Scan() (int, int) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return 0, 0
 	}
 
-	for i := range c.Records {
-		c.Records[i].Alive = false
-	}
+	totalTasks := 0
+	runningTasks := 0
 
-	tasks = 0
-	running = 0
+	seen := make(map[int]bool)
 
-	for _, ent := range entries {
-		if !proc.IsNumeric(ent.Name()) {
+	for _, e := range entries {
+		name := e.Name()
+		if !proc.IsNumeric(name) {
 			continue
 		}
-		pid, _ := strconv.Atoi(ent.Name())
-		idx := c.ensureRecord(pid)
-		rec := &c.Records[idx]
 
-		comm, state, ut, st, pr, ni, _, _, vsizeKB, rssKB, ok := proc.ReadProcStat(pid)
+		pid := 0
+		for _, ch := range name {
+			pid = pid*10 + int(ch-'0')
+		}
+
+		totalTasks++
+
+		comm, state, utime, stime, prio, nice, _, _, vsizeKB, rssKB, ok := proc.ReadProcStat(pid)
 		if !ok {
-			rec.Alive = false
 			continue
 		}
 
-		rec.State = state
-		rec.Prio = pr
-		rec.Nice = ni
-		rec.VSizeKB = vsizeKB
-		rec.RSSKB = rssKB
+		if state == 'R' {
+			runningTasks++
+		}
+
+		seen[pid] = true
 
 		uid := proc.ReadStatusUID(pid)
-		rec.Uid = uid
-		rec.User = proc.UIDToName(uid)
-
+		user := proc.UIDToName(uid)
 		cmd := proc.ReadCmdline(pid)
-		if cmd == "" {
-			cmd = comm
-		}
-		rec.Cmd = cmd
 
-		rec.CurProcTime = ut + st
+		curProcTime := utime + stime
 
-		tasks++
-		if state == 'R' {
-			running++
+		idx, exists := c.PidMap[pid]
+		if exists {
+			rec := &c.Records[idx]
+			rec.Alive = true
+			rec.User = user
+			rec.Comm = comm // ← ACTUALIZAR
+			rec.State = state
+			rec.Prio = prio
+			rec.Nice = nice
+			rec.CurProcTime = curProcTime
+			rec.VSizeKB = vsizeKB
+			rec.RSSKB = rssKB
+			rec.Cmd = cmd
+		} else {
+			newRec := model.ProcRec{
+				Pid:          pid,
+				Uid:          uid,
+				User:         user,
+				Comm:         comm, // ← GUARDAR COMM
+				State:        state,
+				Prio:         prio,
+				Nice:         nice,
+				PrevProcTime: 0,
+				CurProcTime:  curProcTime,
+				CPU:          0,
+				VSizeKB:      vsizeKB,
+				RSSKB:        rssKB,
+				PMem:         0,
+				Cmd:          cmd,
+				Alive:        true,
+			}
+			c.Records = append(c.Records, newRec)
+			c.PidMap[pid] = len(c.Records) - 1
 		}
 	}
-	return
+
+	for i := range c.Records {
+		rec := &c.Records[i]
+		if !seen[rec.Pid] {
+			rec.Alive = false
+		}
+	}
+
+	return totalTasks, runningTasks
 }
 
 func (c *Collector) Compact() {
-	dst := c.Records[:0]
-	for _, r := range c.Records {
-		if r.Alive {
-			dst = append(dst, r)
+	alive := c.Records[:0]
+	for i := range c.Records {
+		if c.Records[i].Alive {
+			alive = append(alive, c.Records[i])
 		}
 	}
-	c.Records = dst
+	c.Records = alive
+
+	c.PidMap = make(map[int]int)
+	for i := range c.Records {
+		c.PidMap[c.Records[i].Pid] = i
+	}
+}
+
+func SortByCPU(records []model.ProcRec) {
+	sort.Slice(records, func(i, j int) bool {
+		return records[i].CPU > records[j].CPU
+	})
 }
