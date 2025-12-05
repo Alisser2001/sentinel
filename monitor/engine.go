@@ -52,48 +52,59 @@ func (e *Engine) collectLoop(ctx context.Context, interval time.Duration, logger
 			return
 
 		case <-ticker.C:
-			tasks, running := e.Collector.Scan()
-
-			curTotal := int64(proc.ReadTotalCPUTime())
-			sysDelta := int64(1)
-			if curTotal > prevTotal {
-				sysDelta = curTotal - prevTotal
-			}
-
-			// Calculate %CPU and %MEM
-			for i := range e.Collector.Records {
-				r := &e.Collector.Records[i]
-				if !r.Alive {
-					continue
-				}
-				if r.PrevProcTime == 0 {
-					r.CPU = 0
-				} else {
-					procDelta := uint64(0)
-					if r.CurProcTime > r.PrevProcTime {
-						procDelta = r.CurProcTime - r.PrevProcTime
-					}
-					r.CPU = float64(procDelta) * 100.0 / float64(sysDelta)
-				}
-				if memTotal > 0 {
-					r.PMem = float64(r.RSSKB) * 100.0 / float64(memTotal)
-				}
-				r.PrevProcTime = r.CurProcTime
-			}
-
-			prevTotal = curTotal
-			memTotal = proc.ReadMemTotalKB()
-
-			e.Collector.Compact()
-
-			// Don't sort here - let TUI handle it based on user selection
-			// SortByCPU(e.Collector.Records)
-
-			l1, l5, l15 := proc.ReadLoadavg()
-			uptime := proc.ReadUptime()
-
-			// Send data to TUI
-			ui.SendData(e.program, e.Collector.Records, tasks, running, l1, l5, l15, uptime)
+			prevTotal, memTotal = e.handleTick(prevTotal, memTotal)
 		}
+	}
+}
+
+// handleTick performs one collection cycle: scans processes, updates metrics,
+// compacts records, reads system load/uptime and sends data to the TUI.
+// Returns updated prevTotal and memTotal.
+func (e *Engine) handleTick(prevTotal int64, memTotal int64) (int64, int64) {
+	tasks, running := e.Collector.Scan()
+
+	curTotal := int64(proc.ReadTotalCPUTime())
+	sysDelta := int64(1)
+	if curTotal > prevTotal {
+		sysDelta = curTotal - prevTotal
+	}
+
+	e.computeMetrics(sysDelta, memTotal)
+
+	prevTotal = curTotal
+	memTotal = proc.ReadMemTotalKB()
+
+	e.Collector.Compact()
+
+	loads := proc.ReadLoadavg()
+	uptime := proc.ReadUptime()
+
+	ui.SendData(e.program, e.Collector.Records, tasks, running, loads, uptime)
+	return prevTotal, memTotal
+}
+
+// computeMetrics updates %CPU and %MEM for alive records using deltas.
+func (e *Engine) computeMetrics(sysDelta int64, memTotal int64) {
+	for i := range e.Collector.Records {
+		r := &e.Collector.Records[i]
+		if !r.Alive {
+			continue
+		}
+
+		if r.PrevProcTime == 0 {
+			r.CPU = 0
+		} else {
+			procDelta := uint64(0)
+			if r.CurProcTime > r.PrevProcTime {
+				procDelta = r.CurProcTime - r.PrevProcTime
+			}
+			r.CPU = float64(procDelta) * 100.0 / float64(sysDelta)
+		}
+
+		if memTotal > 0 {
+			r.PMem = float64(r.RSSKB) * 100.0 / float64(memTotal)
+		}
+
+		r.PrevProcTime = r.CurProcTime
 	}
 }
