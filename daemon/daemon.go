@@ -2,15 +2,15 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
-	"fmt"
 
 	"sentinel/alert"
 	"sentinel/config"
+	"sentinel/model"
 	"sentinel/monitor"
 	"sentinel/proc"
-	"sentinel/model"
 
 	"github.com/fsnotify/fsnotify"
 )

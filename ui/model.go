@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"sync"
 	"time"
 
 	"sentinel/config"
@@ -14,7 +16,6 @@ import (
 )
 
 // Model holds TUI state
-
 type Model struct {
 	table       table.Model
 	records     []model.ProcRec
@@ -141,15 +142,111 @@ func tickCmd(interval time.Duration) tea.Cmd {
 	})
 }
 
+// --- CSV export for experiment comparison (pidstat-like) ---
+var (
+	exportCSVOnce sync.Once
+	exportCSVFile *os.File
+)
+
+func openExportCSV() {
+	exportCSVOnce.Do(func() {
+		path := os.Getenv("SENTINEL_EXPORT_CSV")
+
+		// DEBUG: Imprimir en stderr
+		fmt.Fprintf(os.Stderr, "[DEBUG] SENTINEL_EXPORT_CSV = '%s'\n", path)
+
+		if path == "" {
+			fmt.Fprintf(os.Stderr, "[DEBUG] CSV export disabled (env var not set)\n")
+			return
+		}
+
+		fmt.Fprintf(os.Stderr, "[DEBUG] Opening CSV file: %s\n", path)
+
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to open CSV export: %v\n", err)
+			return
+		}
+
+		exportCSVFile = f
+		fmt.Fprintf(os.Stderr, "[DEBUG] CSV file opened successfully\n")
+
+		// Write header if file is empty
+		stat, err := f.Stat()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to stat file: %v\n", err)
+			return
+		}
+
+		if stat.Size() == 0 {
+			header := "timestamp_ms,pid,user,comm,cpu_pct,mem_pct,vsize_kb,rss_kb,state,threads,time_plus,cmdline\n"
+			_, err = f.WriteString(header)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] Failed to write header: %v\n", err)
+				return
+			}
+			fmt.Fprintf(os.Stderr, "[DEBUG] CSV header written\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "[DEBUG] CSV file already has data (%d bytes)\n", stat.Size())
+		}
+	})
+}
+
+func exportRecordCSV(t time.Time, r model.ProcRec) {
+	if exportCSVFile == nil || !r.Alive {
+		return
+	}
+
+	timeStr := FormatTimeTicks(r.CurProcTime, model.DefaultHZ)
+	cmdline := r.Cmd
+	if cmdline == "" {
+		cmdline = r.Comm
+	}
+
+	// Replace commas to avoid CSV issues
+	cmdline = ""
+	for _, ch := range r.Cmd {
+		if ch == ',' {
+			cmdline += " "
+		} else {
+			cmdline += string(ch)
+		}
+	}
+
+	fmt.Fprintf(exportCSVFile,
+		"%d,%d,%s,%s,%.1f,%.1f,%d,%d,%s,%d,%s,%s\n",
+		t.UnixMilli(),
+		r.Pid,
+		r.User,
+		r.Comm,
+		r.CPU,
+		r.PMem,
+		r.VSizeKB,
+		r.RSSKB,
+		string(r.State),
+		timeStr,
+		cmdline,
+	)
+}
+
 // SendData is called by engine to push new data
-func SendData(p *tea.Program, records []model.ProcRec, tasks, running int, l1, l5, l15, uptime float64) {
+func SendData(p *tea.Program, records []model.ProcRec, tasks, running int, loads [3]float64, uptime float64) {
+	// Export CSV if enabled
+	openExportCSV()
+	if exportCSVFile != nil {
+		now := time.Now()
+		for _, r := range records {
+			exportRecordCSV(now, r)
+		}
+	}
+
 	p.Send(dataMsg{
 		records: records,
 		tasks:   tasks,
 		running: running,
-		l1:      l1,
-		l5:      l5,
-		l15:     l15,
+		l1:      loads[0],
+		l5:      loads[1],
+		l15:     loads[2],
 		uptime:  uptime,
 	})
 }
