@@ -2,13 +2,13 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
-	"strconv" 
 
+	"sentinel/config"
 	"sentinel/model"
 	"sentinel/proc"
-	"sentinel/config"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -100,11 +100,11 @@ const (
 	confirmNiceMode
 	helpMode // Nuevo modo para mostrar ayuda
 	settingsMode
-    editThresholdCPU
-    editThresholdMEM
-    addWebhookMode
-    confirmDeleteWebhook
-    selectWebhookMode
+	editThresholdCPU
+	editThresholdMEM
+	addWebhookMode
+	confirmDeleteWebhook
+	selectWebhookMode
 )
 
 // Model holds TUI state
@@ -133,14 +133,14 @@ type Model struct {
 	selectedPID int
 	niceValue   int
 
-	cfg            *config.SentinelConfig
-    webhookNames   []string
-    selectedWebhookIndex int
+	cfg                  *config.SentinelConfig
+	webhookNames         []string
+	selectedWebhookIndex int
 
-    cpuInput        textinput.Model
-    memInput        textinput.Model
-    webhookNameInput textinput.Model
-    webhookURLInput  textinput.Model
+	cpuInput          textinput.Model
+	memInput          textinput.Model
+	webhookNameInput  textinput.Model
+	webhookURLInput   textinput.Model
 	addingWebhookStep int
 }
 
@@ -206,17 +206,17 @@ func NewModel(interval time.Duration) Model {
 	}
 
 	return Model{
-		table:       t,
-		sorter:      model.NewSorter(),
-		interval:    interval,
-		filterInput: ti,
-		mode:        normalMode,
-		cfg: cfg,
-		webhookNames: whNames,
-		cpuInput: cpuInput,
-		memInput: memInput,
-		webhookNameInput: webhookName,
-		webhookURLInput: webhookURL,
+		table:                t,
+		sorter:               model.NewSorter(),
+		interval:             interval,
+		filterInput:          ti,
+		mode:                 normalMode,
+		cfg:                  cfg,
+		webhookNames:         whNames,
+		cpuInput:             cpuInput,
+		memInput:             memInput,
+		webhookNameInput:     webhookName,
+		webhookURLInput:      webhookURL,
 		selectedWebhookIndex: 0,
 	}
 }
@@ -238,43 +238,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-		case tea.KeyMsg:
-			switch m.mode {
-				case settingsMode:
-					return m.handleSettingsMode(msg)
-				case editThresholdCPU:
-					return m.handleEditCPU(msg)
-				case editThresholdMEM:
-					return m.handleEditMEM(msg)
-				case addWebhookMode:
-					return m.handleAddWebhook(msg)
-			}
-			return m.handleKeyPress(msg)
+	case tea.KeyMsg:
+		switch m.mode {
+		case settingsMode:
+			return m.handleSettingsMode(msg)
+		case editThresholdCPU:
+			return m.handleEditCPU(msg)
+		case editThresholdMEM:
+			return m.handleEditMEM(msg)
+		case addWebhookMode:
+			return m.handleAddWebhook(msg)
+		}
+		return m.handleKeyPress(msg)
 
-		case tea.WindowSizeMsg:
-			m.width = msg.Width
-			m.height = msg.Height
-			m.table.SetHeight(msg.Height - 12) // Más espacio para ayuda
-			return m, nil
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.table.SetHeight(msg.Height - 12) // Más espacio para ayuda
+		return m, nil
 
-		case tickMsg:
-			return m, tickCmd(m.interval)
+	case tickMsg:
+		return m, tickCmd(m.interval)
 
-		case dataMsg:
-			m.records = msg.records
-			m.tasks = msg.tasks
-			m.running = msg.running
-			m.l1 = msg.l1
-			m.l5 = msg.l5
-			m.l15 = msg.l15
-			m.uptime = msg.uptime
-			m.updateTable()
-			return m, nil
+	case dataMsg:
+		m.records = msg.records
+		m.tasks = msg.tasks
+		m.running = msg.running
+		m.l1 = msg.l1
+		m.l5 = msg.l5
+		m.l15 = msg.l15
+		m.uptime = msg.uptime
+		m.updateTable()
+		return m, nil
 
-		case statusMsg:
-			m.statusText = msg.text
-			m.statusError = msg.isError
-			return m, nil
+	case statusMsg:
+		m.statusText = msg.text
+		m.statusError = msg.isError
+		return m, nil
 	}
 
 	// Update filter input if in filter mode
@@ -307,78 +307,78 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
+	case "q", "ctrl+c":
+		return m, tea.Quit
 
-		// Mostrar ayuda
-		case "?", "h":
-			m.mode = helpMode
-			return m, nil
+	// Mostrar ayuda
+	case "?", "h":
+		m.mode = helpMode
+		return m, nil
 
-		// Sorting
-		case "c":
-			m.sorter.Toggle(model.SortByCPUCol)
-			m.updateTable()
-		case "m":
-			m.sorter.Toggle(model.SortByMEM)
-			m.updateTable()
-		case "p":
-			m.sorter.Toggle(model.SortByPID)
-			m.updateTable()
-		case "u":
-			m.sorter.Toggle(model.SortByUSER)
-			m.updateTable()
-		case "v":
-			m.sorter.Toggle(model.SortByVSIZE)
-			m.updateTable()
-		case "r":
-			m.sorter.Toggle(model.SortByRSS)
-			m.updateTable()
-		case "t":
-			m.sorter.Toggle(model.SortByTIME)
-			m.updateTable()
+	// Sorting
+	case "c":
+		m.sorter.Toggle(model.SortByCPUCol)
+		m.updateTable()
+	case "m":
+		m.sorter.Toggle(model.SortByMEM)
+		m.updateTable()
+	case "p":
+		m.sorter.Toggle(model.SortByPID)
+		m.updateTable()
+	case "u":
+		m.sorter.Toggle(model.SortByUSER)
+		m.updateTable()
+	case "v":
+		m.sorter.Toggle(model.SortByVSIZE)
+		m.updateTable()
+	case "r":
+		m.sorter.Toggle(model.SortByRSS)
+		m.updateTable()
+	case "t":
+		m.sorter.Toggle(model.SortByTIME)
+		m.updateTable()
 
-		// Filtering
-		case "/":
-			m.mode = filterMode
-			m.filterInput.Focus()
-			return m, textinput.Blink
+	// Filtering
+	case "/":
+		m.mode = filterMode
+		m.filterInput.Focus()
+		return m, textinput.Blink
 
-		// Kill process
-		case "k":
-			if pid := m.getSelectedPID(); pid > 0 {
-				m.selectedPID = pid
-				m.mode = confirmKillMode
+	// Kill process
+	case "k":
+		if pid := m.getSelectedPID(); pid > 0 {
+			m.selectedPID = pid
+			m.mode = confirmKillMode
+		}
+
+	// Force kill
+	case "K":
+		if pid := m.getSelectedPID(); pid > 0 {
+			if err := proc.ForceKillProcess(pid); err != nil {
+				return m, m.showStatus(fmt.Sprintf("Error: %v", err), true)
 			}
+			return m, m.showStatus(fmt.Sprintf("Sent SIGKILL to PID %d", pid), false)
+		}
 
-		// Force kill
-		case "K":
-			if pid := m.getSelectedPID(); pid > 0 {
-				if err := proc.ForceKillProcess(pid); err != nil {
-					return m, m.showStatus(fmt.Sprintf("Error: %v", err), true)
-				}
-				return m, m.showStatus(fmt.Sprintf("Sent SIGKILL to PID %d", pid), false)
-			}
+	// Renice (increase priority)
+	case "n":
+		if pid := m.getSelectedPID(); pid > 0 {
+			m.selectedPID = pid
+			m.niceValue = -5
+			m.mode = confirmNiceMode
+		}
 
-		// Renice (increase priority)
-		case "n":
-			if pid := m.getSelectedPID(); pid > 0 {
-				m.selectedPID = pid
-				m.niceValue = -5
-				m.mode = confirmNiceMode
-			}
+	// Renice (decrease priority)
+	case "N":
+		if pid := m.getSelectedPID(); pid > 0 {
+			m.selectedPID = pid
+			m.niceValue = 5
+			m.mode = confirmNiceMode
+		}
 
-		// Renice (decrease priority)
-		case "N":
-			if pid := m.getSelectedPID(); pid > 0 {
-				m.selectedPID = pid
-				m.niceValue = 5
-				m.mode = confirmNiceMode
-			}
-
-		case "s":
-			m.mode = settingsMode
-			return m, nil
+	case "s":
+		m.mode = settingsMode
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -460,23 +460,23 @@ func (m Model) handleHelpMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSettingsMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-    switch msg.String() {
+	switch msg.String() {
 
-    case "q", "esc":
-        m.mode = normalMode
-        return m, nil
+	case "q", "esc":
+		m.mode = normalMode
+		return m, nil
 
-    case "e":
-        m.mode = editThresholdCPU
-        m.cpuInput.Focus()
-        return m, nil
+	case "e":
+		m.mode = editThresholdCPU
+		m.cpuInput.Focus()
+		return m, nil
 
-    case "m":
-        m.mode = editThresholdMEM
-        m.memInput.Focus()
-        return m, nil
+	case "m":
+		m.mode = editThresholdMEM
+		m.memInput.Focus()
+		return m, nil
 
-    case "a":
+	case "a":
 		m.mode = addWebhookMode
 		m.addingWebhookStep = 0
 		m.webhookNameInput.SetValue("")
@@ -484,74 +484,74 @@ func (m Model) handleSettingsMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.webhookNameInput.Focus()
 		return m, nil
 
-    case "d":
-        if len(m.webhookNames) > 0 {
-            m.mode = confirmDeleteWebhook
-        }
-        return m, nil
+	case "d":
+		if len(m.webhookNames) > 0 {
+			m.mode = confirmDeleteWebhook
+		}
+		return m, nil
 
-    case "w":
-        if len(m.webhookNames) > 0 {
-            name := m.webhookNames[m.selectedWebhookIndex]
-            m.cfg.ActiveWebhook = name
-            config.SaveConfig(m.cfg)
-        }
-        return m, nil
+	case "w":
+		if len(m.webhookNames) > 0 {
+			name := m.webhookNames[m.selectedWebhookIndex]
+			m.cfg.ActiveWebhook = name
+			config.SaveConfig(m.cfg)
+		}
+		return m, nil
 
-    case "up":
-        if m.selectedWebhookIndex > 0 {
-            m.selectedWebhookIndex--
-        }
-        return m, nil
+	case "up":
+		if m.selectedWebhookIndex > 0 {
+			m.selectedWebhookIndex--
+		}
+		return m, nil
 
-    case "down":
-        if m.selectedWebhookIndex < len(m.webhookNames)-1 {
-            m.selectedWebhookIndex++
-        }
-        return m, nil
-    }
+	case "down":
+		if m.selectedWebhookIndex < len(m.webhookNames)-1 {
+			m.selectedWebhookIndex++
+		}
+		return m, nil
+	}
 
-    return m, nil
+	return m, nil
 }
 
 func (m Model) handleEditCPU(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-    switch msg.String() {
-    case "enter":
-        v := m.cpuInput.Value()
-        f, _ := strconv.ParseFloat(v, 64)
-        m.cfg.CPUThreshold = f
-        config.SaveConfig(m.cfg)
-        m.mode = settingsMode
-        return m, nil
+	switch msg.String() {
+	case "enter":
+		v := m.cpuInput.Value()
+		f, _ := strconv.ParseFloat(v, 64)
+		m.cfg.CPUThreshold = f
+		config.SaveConfig(m.cfg)
+		m.mode = settingsMode
+		return m, nil
 
-    case "esc":
-        m.mode = settingsMode
-        return m, nil
-    }
+	case "esc":
+		m.mode = settingsMode
+		return m, nil
+	}
 
-    var cmd tea.Cmd
-    m.cpuInput, cmd = m.cpuInput.Update(msg)
-    return m, cmd
+	var cmd tea.Cmd
+	m.cpuInput, cmd = m.cpuInput.Update(msg)
+	return m, cmd
 }
 
 func (m Model) handleEditMEM(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-    switch msg.String() {
-    case "enter":
-        v := m.memInput.Value()
-        f, _ := strconv.ParseFloat(v, 64)
-        m.cfg.MemThreshold = f
-        config.SaveConfig(m.cfg)
-        m.mode = settingsMode
-        return m, nil
+	switch msg.String() {
+	case "enter":
+		v := m.memInput.Value()
+		f, _ := strconv.ParseFloat(v, 64)
+		m.cfg.MemThreshold = f
+		config.SaveConfig(m.cfg)
+		m.mode = settingsMode
+		return m, nil
 
-    case "esc":
-        m.mode = settingsMode
-        return m, nil
-    }
+	case "esc":
+		m.mode = settingsMode
+		return m, nil
+	}
 
-    var cmd tea.Cmd
-    m.memInput, cmd = m.memInput.Update(msg)
-    return m, cmd
+	var cmd tea.Cmd
+	m.memInput, cmd = m.memInput.Update(msg)
+	return m, cmd
 }
 
 func (m Model) handleAddWebhook(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -617,15 +617,19 @@ func (m *Model) updateTable() {
 			if !r.Alive {
 				continue
 			}
+			// Include search in Cmd, User and Comm (program name)
 			if strings.Contains(strings.ToLower(r.Cmd), searchLower) ||
-				strings.Contains(strings.ToLower(r.User), searchLower) {
+				strings.Contains(strings.ToLower(r.User), searchLower) ||
+				strings.Contains(strings.ToLower(r.Comm), searchLower) {
 				filtered = append(filtered, r)
 			}
 		}
 	}
 
-	// Sort
-	m.sorter.Sort(filtered)
+	// Sort on a copy to avoid mutating shared collector slice
+	sorted := make([]model.ProcRec, len(filtered))
+	copy(sorted, filtered)
+	m.sorter.Sort(sorted)
 
 	// Update column headers with sort indicator
 	columns := m.table.Columns()
@@ -666,9 +670,12 @@ func (m *Model) updateTable() {
 
 	m.table.SetColumns(columns)
 
+	// Preserve current selection by PID across refreshes
+	selectedPID := m.getSelectedPID()
+
 	// Build table rows
-	rows := make([]table.Row, 0, len(filtered))
-	for _, r := range filtered {
+	rows := make([]table.Row, 0, len(sorted))
+	for _, r := range sorted {
 		if !r.Alive {
 			continue
 		}
@@ -721,7 +728,8 @@ func (m *Model) updateTable() {
 			args = args[:42] + "..."
 		}
 
-		timeStr := FormatTime(r.CurProcTime, model.DefaultHZ)
+		// Show CPU time with centiseconds like top's TIME+
+		timeStr := FormatTimeTicks(r.CurProcTime, model.DefaultHZ)
 
 		rows = append(rows, table.Row{
 			fmt.Sprintf("%d", r.Pid),
@@ -742,6 +750,18 @@ func (m *Model) updateTable() {
 	}
 
 	m.table.SetRows(rows)
+
+	// Restore selection to the same PID if still present
+	if selectedPID > 0 && len(rows) > 0 {
+		for i := range rows {
+			var pid int
+			fmt.Sscanf(rows[i][0], "%d", &pid)
+			if pid == selectedPID {
+				m.table.SetCursor(i)
+				break
+			}
+		}
+	}
 }
 
 func (m Model) getSelectedPID() int {
@@ -991,36 +1011,36 @@ func SendData(p *tea.Program, records []model.ProcRec, tasks, running int, l1, l
 }
 
 func (m Model) renderSettings() string {
-    var b strings.Builder
+	var b strings.Builder
 
-    b.WriteString("===== SETTINGS =====\n\n")
+	b.WriteString("===== SETTINGS =====\n\n")
 
-    b.WriteString(fmt.Sprintf("CPU Threshold: %.0f\n", m.cfg.CPUThreshold))
-    b.WriteString(fmt.Sprintf("MEM Threshold: %.0f\n\n", m.cfg.MemThreshold))
+	b.WriteString(fmt.Sprintf("CPU Threshold: %.0f\n", m.cfg.CPUThreshold))
+	b.WriteString(fmt.Sprintf("MEM Threshold: %.0f\n\n", m.cfg.MemThreshold))
 
-    b.WriteString("Webhooks:\n")
-    for i, name := range m.webhookNames {
-        marker := " "
-        if name == m.cfg.ActiveWebhook {
-            marker = "*"
-        }
-        sel := " "
-        if i == m.selectedWebhookIndex {
-            sel = ">"
-        }
-        url := m.cfg.Webhooks[name]
-        b.WriteString(fmt.Sprintf("%s %s %s → %s\n", sel, marker, name, url))
-    }
+	b.WriteString("Webhooks:\n")
+	for i, name := range m.webhookNames {
+		marker := " "
+		if name == m.cfg.ActiveWebhook {
+			marker = "*"
+		}
+		sel := " "
+		if i == m.selectedWebhookIndex {
+			sel = ">"
+		}
+		url := m.cfg.Webhooks[name]
+		b.WriteString(fmt.Sprintf("%s %s %s → %s\n", sel, marker, name, url))
+	}
 
-    b.WriteString("\nActions:\n")
-    b.WriteString(" e  Edit CPU Threshold\n")
-    b.WriteString(" m  Edit MEM Threshold\n")
-    b.WriteString(" a  Add Webhook\n")
-    b.WriteString(" d  Delete Webhook\n")
-    b.WriteString(" w  Set Selected as Active\n")
-    b.WriteString(" q  Back\n")
+	b.WriteString("\nActions:\n")
+	b.WriteString(" e  Edit CPU Threshold\n")
+	b.WriteString(" m  Edit MEM Threshold\n")
+	b.WriteString(" a  Add Webhook\n")
+	b.WriteString(" d  Delete Webhook\n")
+	b.WriteString(" w  Set Selected as Active\n")
+	b.WriteString(" q  Back\n")
 
-    return b.String()
+	return b.String()
 }
 
 func (m Model) renderAddWebhook() string {

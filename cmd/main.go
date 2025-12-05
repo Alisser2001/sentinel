@@ -9,6 +9,7 @@ import (
 
 	"sentinel/daemon"
 	"sentinel/monitor"
+	"sentinel/proc"
 )
 
 func main() {
@@ -16,16 +17,16 @@ func main() {
 		usage()
 		return
 	}
-
+	hz := proc.DetectHZ()
 	cmd := os.Args[1]
 
 	switch cmd {
 
 	case "tui":
-		runTUI()
+		runTUI(hz)
 
 	case "daemon":
-		runDaemon()
+		runDaemon(hz)
 
 	case "help":
 		usage()
@@ -45,18 +46,18 @@ func usage() {
     `)
 }
 
-func runTUI() {
+func runTUI(hz int) {
 	ctx := context.Background()
 	interval := 1500 * time.Millisecond
 
 	engine := monitor.NewEngine()
-	engine.Run(ctx, interval, 100, log.New(os.Stderr, "[sentinel] ", log.LstdFlags))
+	engine.Run(ctx, interval, hz, log.New(os.Stderr, "[sentinel] ", log.LstdFlags))
 }
 
-func runDaemon() {
+func runDaemon(hz int) {
 	ctx := context.Background()
 	logger := log.New(os.Stderr, "[sentinel-daemon] ", log.LstdFlags)
 
-	d := daemon.New(1*time.Second, 100, logger)
+	d := daemon.New(1*time.Second, hz, logger)
 	d.Run(ctx)
 }

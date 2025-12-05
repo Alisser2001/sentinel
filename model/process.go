@@ -1,7 +1,7 @@
 package model
 
 // Change from const to var so it can be reassigned
-var DefaultHZ = 100
+var DefaultHZ = 1000
 
 const MaxRows = 100
 
